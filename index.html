@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gilbert Gradient Curves — Newton-Raphson Solver</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col selection:bg-blue-600 selection:text-white">
+
+  <!-- Non-intrusive Toast Notification (Replaces alert()) -->
+  <div id="toastBanner"
+    class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 pointer-events-none transition-all duration-300 bg-white border border-slate-200 border-l-4 border-l-blue-600 text-slate-800 px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-xs font-medium">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-600 text-base"></i>
+    <span id="toastText">Calculation updated</span>
+  </div>
+
+  <!-- Top Academic Engineering Header Banner -->
+  <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+    <div
+      class="max-w-[1540px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div class="flex items-start sm:items-center gap-3.5">
+        <div class="bg-blue-900 text-white p-3 rounded-xl shadow-sm shrink-0">
+          <i class="fa-solid fa-oil-well text-lg"></i>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-blue-950">
+              Gilbert Gradient Curves &mdash; Newton-Raphson Solver
+            </h1>
+            <span
+              class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              Nind Book &bull; Ch. 4
+            </span>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+            Multiphase Vertical Tubing Hydraulics &amp; Equivalent Depth Method (T.E.W. Nind, <em>Principles of Oil Well
+              Production</em>)
+          </p>
+        </div>
+      </div>
+
+      <!-- Textbook & Field Benchmark Presets -->
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mr-1">
+          Presets:
+        </span>
+        <button onclick="applyPreset('nind_benchmark')"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">
+          Nind 600 b/d Benchmark (THP = 530 psi)
+        </button>
+        <button onclick="applyPreset('find_bhp')"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">
+          Find Flowing BHP
+        </button>
+        <button onclick="applyPreset('find_thp')"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">
+          Find THP
+        </button>
+        <button onclick="applyPreset('gas_lift')"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">
+          Gas-Lift GLR
+        </button>
+        <button onclick="applyPreset('valve_depth')"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">
+          Valve Depth
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Dashboard Container -->
+  <main class="flex-1 max-w-[1540px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Prominent Mathematical Formulation Card (Vinay Shenoy Academic Style) -->
+    <section class="bg-white border border-slate-200 border-l-4 border-l-blue-600 rounded-xl shadow-sm p-4 sm:p-5">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-blue-900">
+              <i class="fa-solid fa-square-root-variable text-blue-600 mr-1.5"></i>Governing Mathematical Formulation
+              &amp; Newton-Raphson Method
+            </span>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+              RK4 Integration (&Delta;P = 20 psi)
+            </span>
+          </div>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Nind's Equivalent Depth <span class="font-mono font-semibold text-slate-800">H(P) =
+              &int;<sub>0</sub><sup>P</sup> (dp / dh)<sup>&minus;1</sup> dP</span> maps pressure to vertical depth along
+            a constant-(<span class="font-mono">q, GLR, d</span>) gradient curve such that <span
+              class="font-mono font-semibold text-blue-900">H(P<sub>wf</sub>) &minus; H(P<sub>wh</sub>) = D</span>.
+          </p>
+        </div>
+
+        <!-- Dynamic Objective Function & Derivative Block -->
+        <div
+          class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 font-mono text-xs space-y-1.5 shrink-0 lg:min-w-[470px]">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-slate-500 font-semibold">Objective f(x) = 0:</span>
+            <span id="mathObjectiveEq" class="text-blue-900 font-bold">f(Pwh) = H(Pwh) &minus; [H(Pwf) &minus; D] =
+              0</span>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-slate-500 font-semibold">Derivative f'(x):</span>
+            <span id="mathDerivativeEq" class="text-emerald-700 font-semibold">f'(Pwh) = dH/dPwh = 1 /
+              (dp/dh)|<sub>Pwh</sub></span>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
+            <span class="text-slate-500 font-semibold">NR Update Step:</span>
+            <span class="text-slate-800">x<sup>(k+1)</sup> = x<sup>(k)</sup> &minus; f(x<sup>(k)</sup>) /
+              f'(x<sup>(k)</sup>)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Top Two-Column Workspace -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- LEFT COLUMN (4 cols): Well & Solver Inputs Card -->
+      <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-blue-900 flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-blue-600"></i> Well &amp; Solver Inputs
+          </h2>
+          <span class="text-[11px] font-mono text-slate-500">5 Known &rarr; 1 Unknown</span>
+        </div>
+
+        <!-- Unknown Target Variable Selector -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
+          <label for="targetVar" class="block text-xs font-bold uppercase tracking-wider text-blue-900">
+            Unknown Target Variable to Solve
+          </label>
+          <select id="targetVar" onchange="handleTargetChange()"
+            class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
+            <option value="pwh" selected>1. Tubing Head Pressure (THP / Pwh) [psig]</option>
+            <option value="pwf">2. Bottom Hole Pressure (BHP / Pwf) [psig]</option>
+            <option value="depth">3. Wellbore Depth (D) [ft]</option>
+            <option value="glr">4. Gas-Liquid Ratio (GLR) [scf/bbl]</option>
+            <option value="rate">5. Liquid Production Rate (q) [bbl/day]</option>
+            <option value="tubing">6. Tubing Internal Diameter (ID) [in]</option>
+          </select>
+        </div>
+
+        <!-- 6 Engineering Parameters -->
+        <div class="space-y-3.5">
+
+          <!-- Parameter 1: Wellbore Depth (D) -->
+          <div id="group-depth" class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label for="depth" class="text-xs font-semibold text-slate-700">Wellbore Depth (D)</label>
+              <span id="badge-depth"
+                class="hidden text-[10px] font-bold px-2 py-0.5 rounded bg-blue-600 text-white tracking-wide">TARGET
+                (SOLVED)</span>
+            </div>
+            <div class="relative">
+              <input type="number" id="depth" value="8000" step="50" min="50" max="30000" oninput="onInputModified()"
+                class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 pr-12 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <span class="absolute right-3 top-2.5 text-xs font-mono text-slate-500">ft</span>
+            </div>
+          </div>
+
+          <!-- Parameter 2: Tubing Size (API Nominal Selector + ID Input) -->
+          <div id="group-tubing" class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label for="tubingID" class="text-xs font-semibold text-slate-700">Tubing Size &amp; Internal Diameter
+                (ID)</label>
+              <span id="badge-tubing"
+                class="hidden text-[10px] font-bold px-2 py-0.5 rounded bg-blue-600 text-white tracking-wide">TARGET
+                (SOLVED)</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <select id="tubingPreset" onchange="syncTubingFromDropdown()"
+                class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <option value="1.610">1.900" OD (1.610")</option>
+                <option value="1.995" selected>2-3/8" OD (1.995")</option>
+                <option value="2.441">2-7/8" OD (2.441")</option>
+                <option value="2.992">3-1/2" OD (2.992")</option>
+                <option value="3.958">4-1/2" OD (3.958")</option>
+                <option value="custom">Custom ID</option>
+              </select>
+              <div class="relative">
+                <input type="number" id="tubingID" value="1.995" step="0.005" min="0.75" max="8.0"
+                  oninput="syncTubingFromInput()"
+                  class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 pr-11 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <span class="absolute right-3 top-2.5 text-xs font-mono text-slate-500">in</span>
+              </div>
+            </div>
+            <div id="nearestApiBadge"
+              class="text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1 flex items-center justify-between">
+              <span>Nearest Standard API OD:</span>
+              <span id="nearestApiText" class="font-semibold text-blue-800">2-3/8" OD (1.995" ID)</span>
+            </div>
+          </div>
+
+          <!-- Parameter 3: Liquid Production Rate (q) -->
+          <div id="group-rate" class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label for="rate" class="text-xs font-semibold text-slate-700">Liquid Production Rate (q)</label>
+              <span id="badge-rate"
+                class="hidden text-[10px] font-bold px-2 py-0.5 rounded bg-blue-600 text-white tracking-wide">TARGET
+                (SOLVED)</span>
+            </div>
+            <div class="relative">
+              <input type="number" id="rate" value="600" step="10" min="5" max="25000" oninput="onInputModified()"
+                class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 pr-16 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <span class="absolute right-3 top-2.5 text-xs font-mono text-slate-500">bbl/day</span>
+            </div>
+          </div>
+
+          <!-- Parameter 4: Gas-Liquid Ratio (GLR) -->
+          <div id="group-glr" class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label for="glr" class="text-xs font-semibold text-slate-700">Gas-Liquid Ratio (GLR)</label>
+              <span id="badge-glr"
+                class="hidden text-[10px] font-bold px-2 py-0.5 rounded bg-blue-600 text-white tracking-wide">TARGET
+                (SOLVED)</span>
+            </div>
+            <div class="relative">
+              <input type="number" id="glr" value="400" step="25" min="15" max="15000" oninput="onInputModified()"
+                class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 pr-16 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <span class="absolute right-3 top-2.5 text-xs font-mono text-slate-500">scf/bbl</span>
+            </div>
+          </div>
+
+          <!-- Parameter 5: Bottom Hole Pressure (BHP / Pwf) -->
+          <div id="group-pwf" class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label for="pwf" class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span>
+                Bottom Hole Pressure (BHP / Pwf)
+              </label>
+              <span id="badge-pwf"
+                class="hidden text-[10px] font-bold px-2 py-0.5 rounded bg-blue-600 text-white tracking-wide">TARGET
+                (SOLVED)</span>
+            </div>
+            <div class="relative">
+              <input type="number" id="pwf" value="2200" step="10" min="0" max="15000" oninput="onInputModified()"
+                class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 pr-12 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <span class="absolute right-3 top-2.5 text-xs font-mono text-slate-500">psig</span>
+            </div>
+          </div>
+
+          <!-- Parameter 6: Tubing Head Pressure (THP / Pwh) -->
+          <div id="group-pwh" class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label for="pwh" class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-red-600 inline-block"></span>
+                Tubing Head Pressure (THP / Pwh)
+              </label>
+              <span id="badge-pwh"
+                class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-600 text-white tracking-wide">TARGET
+                (SOLVED)</span>
+            </div>
+            <div class="relative">
+              <input type="number" id="pwh" value="530.0" step="10" min="0" max="10000" readonly
+                class="w-full bg-blue-50 border border-blue-400 rounded-lg px-3 py-2 pr-12 text-sm font-mono font-bold text-blue-900 focus:outline-none">
+              <span class="absolute right-3 top-2.5 text-xs font-mono text-blue-700 font-semibold">psig</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Newton-Raphson Solver Controls -->
+        <div class="pt-3.5 border-t border-slate-200 space-y-3">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-blue-900">
+            Newton-Raphson Iteration Parameters
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label for="nrGuess" class="text-xs font-medium text-slate-700">Initial Guess (x&#8320;)</label>
+                <button type="button" onclick="resetAutoGuess()"
+                  class="text-[10px] font-semibold text-blue-600 hover:underline">Auto</button>
+              </div>
+              <input type="number" id="nrGuess" value="520" step="any" oninput="userEditedGuess = true"
+                class="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+            </div>
+            <div>
+              <label for="nrTolerance" class="block text-xs font-medium text-slate-700 mb-1">Tolerance
+                (&epsilon;)</label>
+              <input type="text" id="nrTolerance" value="1e-6" onchange="calculate()"
+                class="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+            </div>
+          </div>
+
+          <button type="button" onclick="calculate(true)"
+            class="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-sm shadow-sm transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-calculator"></i> Solve Target (Newton-Raphson)
+          </button>
+        </div>
+
+        <!-- Hydraulic Summary Metrics Grid -->
+        <div class="pt-3.5 border-t border-slate-200">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2.5">
+            Wellbore Hydraulic Summary
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+              <span class="text-[10px] font-semibold uppercase text-slate-500 block">Pressure Drop (&Delta;P)</span>
+              <span id="resDeltaP" class="text-sm font-bold font-mono text-slate-900 mt-0.5 block">1,670.0 psi</span>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+              <span class="text-[10px] font-semibold uppercase text-slate-500 block">Avg Gradient</span>
+              <span id="resAvgGrad" class="text-sm font-bold font-mono text-blue-700 mt-0.5 block">0.2088 psi/ft</span>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+              <span class="text-[10px] font-semibold uppercase text-slate-500 block">Surface Depth (H&#8321;)</span>
+              <span id="resH1" class="text-sm font-bold font-mono text-red-600 mt-0.5 block">3,433 ft</span>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+              <span class="text-[10px] font-semibold uppercase text-slate-500 block">Sandface Depth (H&#8322;)</span>
+              <span id="resH2" class="text-sm font-bold font-mono text-emerald-700 mt-0.5 block">11,433 ft</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN (8 cols): Gilbert Gradient Curve & Wellbore Profile Card -->
+      <div
+        class="lg:col-span-8 bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex flex-col justify-between space-y-4">
+        <!-- Card Header & Tab Switcher -->
+        <div
+          class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-3.5">
+          <div>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-blue-900">
+              Gilbert Gradient Curve &amp; Wellbore Profile
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Interactive graphical solution showing equivalent depths H&#8321;, H&#8322; and true vertical pressure
+              traverse
+            </p>
+          </div>
+
+          <!-- View Tabs -->
+          <div class="inline-flex bg-slate-100 p-1 rounded-lg border border-slate-200 self-start sm:self-auto">
+            <button id="btnTabGilbert" onclick="switchChartTab('gilbert')"
+              class="px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-600 text-white shadow-sm transition">
+              Gilbert Gradient Curves (H vs P)
+            </button>
+            <button id="btnTabTraverse" onclick="switchChartTab('traverse')"
+              class="px-3 py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+              Wellbore Depth Traverse (z vs P)
+            </button>
+          </div>
+        </div>
+
+        <!-- Chart Legend Strip -->
+        <div
+          class="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2">
+          <div class="flex flex-wrap items-center gap-4">
+            <span class="flex items-center gap-1.5 font-medium text-slate-700">
+              <span class="w-3.5 h-1 bg-blue-600 rounded inline-block"></span>
+              Active Curve (GLR = <span id="legendGLR" class="font-mono font-bold text-blue-700">400</span> scf/bbl)
+            </span>
+            <span id="legendRefWrap" class="flex items-center gap-1.5 text-slate-500">
+              <span class="w-3.5 h-0.5 bg-slate-400 inline-block"></span>
+              GLR Family (100&ndash;3000)
+            </span>
+          </div>
+          <div class="flex items-center gap-4 font-mono text-[11px]">
+            <span class="flex items-center gap-1.5 text-red-600 font-semibold">
+              <span class="w-2.5 h-2.5 rounded-full bg-red-600 inline-block"></span> Wellhead (Pwh, H&#8321;)
+            </span>
+            <span class="flex items-center gap-1.5 text-emerald-700 font-semibold">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span> Sandface (Pwf, H&#8322;)
+            </span>
+          </div>
+        </div>
+
+        <!-- Engineering Graph Paper Canvas Container -->
+        <div class="relative w-full h-[470px] bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <canvas id="mainCanvas"></canvas>
+          <div id="canvasTooltip"
+            class="hidden absolute pointer-events-none bg-white/95 backdrop-blur border border-slate-300 text-slate-800 text-xs px-3 py-2 rounded-lg shadow-lg font-mono z-30">
+          </div>
+        </div>
+
+        <!-- Graphical Rule Caption Bar -->
+        <div
+          class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="font-bold text-blue-900">Nind Graphical Procedure:</span>
+            Project <span class="font-mono font-semibold text-red-600">Pwh</span> to curve for <span
+              class="font-mono font-semibold text-red-600">H&#8321;</span>, shift vertically by <span
+              class="font-mono font-semibold text-blue-800">&Delta;H = D</span> to obtain <span
+              class="font-mono font-semibold text-emerald-700">H&#8322;</span>, and read <span
+              class="font-mono font-semibold text-emerald-700">Pwf</span>.
+          </div>
+          <div id="graphicalBalanceText" class="font-mono font-bold text-blue-900">
+            H&#8322; (11,433 ft) &minus; H&#8321; (3,433 ft) = 8,000 ft
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Full-Width Newton-Raphson Convergence History Card (Vinay Shenoy Table Layout) -->
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3.5">
+        <div>
+          <h2 class="text-sm font-bold uppercase tracking-wider text-blue-900 flex items-center gap-2">
+            <i class="fa-solid fa-list-ol text-blue-600"></i> Newton-Raphson Convergence History
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Step-by-step quadratic convergence log for the selected unknown variable
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5 text-xs font-mono">
+          <span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+            Target: <span id="nrHeaderTarget" class="text-blue-800">THP / Pwh (psig)</span>
+          </span>
+          <span class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+            Final Residual |f(x)|: <span id="nrHeaderResidual" class="font-bold text-slate-900">0.00e+0</span>
+          </span>
+          <span id="nrConvBadge"
+            class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+            <i class="fa-solid fa-circle-check mr-1"></i> Converged in 3 iterations
+          </span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-lg">
+        <table class="w-full text-xs text-left font-mono">
+          <thead class="bg-slate-50 text-slate-600 uppercase text-[11px] tracking-wider border-b border-slate-200">
+            <tr>
+              <th class="py-2.5 px-4">Iteration (k)</th>
+              <th class="py-2.5 px-4">Estimate x<sup>(k)</sup></th>
+              <th class="py-2.5 px-4">Residual f(x<sup>(k)</sup>)</th>
+              <th class="py-2.5 px-4">Derivative f'(x<sup>(k)</sup>)</th>
+              <th class="py-2.5 px-4">Step &Delta;x<sup>(k)</sup></th>
+              <th class="py-2.5 px-4">Relative Error |&Delta;x / x|</th>
+            </tr>
+          </thead>
+          <tbody id="nrHistoryBody" class="divide-y divide-slate-200 text-slate-800">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Additional Engineering Analytical Modules (Clean Light-Mode Tabs/Cards) -->
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-5">
+      <!-- Analytical Module Selector Tabs -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-3.5">
+        <div>
+          <h2 class="text-sm font-bold uppercase tracking-wider text-blue-900">
+            Sensitivity Variance, Multi-Well Batch Solver &amp; Traverse Tables
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Evaluate input uncertainty (&plusmn;%), batch-solve multi-well field tables, or export depth-by-depth
+            pressure profiles
+          </p>
+        </div>
+
+        <div class="flex flex-wrap bg-slate-100 p-1 rounded-lg border border-slate-200 gap-1">
+          <button id="subTabVariance" onclick="switchBottomTab('variance')"
+            class="px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-600 text-white shadow-sm transition">
+            Parameter Variance (&plusmn;%)
+          </button>
+          <button id="subTabBatch" onclick="switchBottomTab('batch')"
+            class="px-3 py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+            Multi-Case Field Data Table
+          </button>
+          <button id="subTabTraverse" onclick="switchBottomTab('traverse')"
+            class="px-3 py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+            Discrete Depth Traverse &amp; CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- SUB-PANEL 1: Parameter Variance (±%) Sensitivity Analysis -->
+      <div id="panelVariance" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <div>
+            <label for="varInputParam" class="block text-xs font-bold text-slate-700 mb-1">
+              Input Parameter to Vary
+            </label>
+            <select id="varInputParam" onchange="runVarianceAnalysis()"
+              class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="glr" selected>Gas-Liquid Ratio (GLR)</option>
+              <option value="rate">Liquid Production Rate (q)</option>
+              <option value="depth">Wellbore Depth (D)</option>
+              <option value="pwf">Bottom Hole Pressure (BHP / Pwf)</option>
+              <option value="pwh">Tubing Head Pressure (THP / Pwh)</option>
+              <option value="tubing">Tubing Internal Diameter (ID)</option>
+            </select>
+          </div>
+          <div>
+            <label for="varPercentage" class="block text-xs font-bold text-slate-700 mb-1">
+              Variance Band (&plusmn;%)
+            </label>
+            <select id="varPercentage" onchange="runVarianceAnalysis()"
+              class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-semibold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="5">&plusmn;5%</option>
+              <option value="10" selected>&plusmn;10%</option>
+              <option value="15">&plusmn;15%</option>
+              <option value="20">&plusmn;20%</option>
+            </select>
+          </div>
+          <div class="flex flex-col justify-center">
+            <span class="text-[11px] font-semibold uppercase text-slate-500">Solved Target Sensitivity Spread</span>
+            <span id="varTotalSpread" class="text-sm font-bold font-mono text-blue-900 mt-1">--</span>
+            <span id="varAutoSwitchNote" class="hidden text-[11px] text-amber-700 mt-0.5">
+              Auto-switched away from active target variable.
+            </span>
+          </div>
+        </div>
+
+        <!-- Low / Nominal / High Comparison Table -->
+        <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-lg">
+          <table class="w-full text-xs text-left font-mono">
+            <thead class="bg-slate-50 text-slate-600 uppercase text-[11px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-2.5 px-4">Variance Scenario</th>
+                <th class="py-2.5 px-4">Varied Input Value</th>
+                <th class="py-2.5 px-4">Solved Target Output</th>
+                <th class="py-2.5 px-4">Surface Depth H&#8321; (ft)</th>
+                <th class="py-2.5 px-4">Sandface Depth H&#8322; (ft)</th>
+                <th class="py-2.5 px-4">Total Drop &Delta;P (psi)</th>
+              </tr>
+            </thead>
+            <tbody id="varianceTableBody" class="divide-y divide-slate-200 text-slate-800">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUB-PANEL 2: Multi-Case Field Data Table (Batch Solver) -->
+      <div id="panelBatch" class="hidden space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p class="text-xs text-slate-600">
+            Leave <strong>any single parameter cell blank</strong> per row and click <strong>Solve All Missing
+              Values</strong> to compute it via Newton-Raphson.
+          </p>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="addBatchRow()"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition">
+              <i class="fa-solid fa-plus text-blue-600 mr-1"></i> Add Row
+            </button>
+            <button onclick="clearBatchSolved()"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition">
+              <i class="fa-solid fa-eraser text-slate-500 mr-1"></i> Clear Solved
+            </button>
+            <button onclick="solveAllBatchRows()"
+              class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition">
+              <i class="fa-solid fa-play mr-1"></i> Solve All Missing Values
+            </button>
+            <button onclick="exportBatchCSV()"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition">
+              <i class="fa-solid fa-file-csv mr-1"></i> Export Batch CSV
+            </button>
+          </div>
+        </div>
+
+        <div id="batchBanner" class="hidden text-xs px-3.5 py-2 rounded-lg border"></div>
+
+        <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-lg">
+          <table class="w-full text-xs text-left font-mono">
+            <thead class="bg-slate-50 text-slate-600 uppercase text-[11px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-2.5 px-3">Well / Case ID</th>
+                <th class="py-2.5 px-3">Depth D (ft)</th>
+                <th class="py-2.5 px-3">Tubing ID (in)</th>
+                <th class="py-2.5 px-3">Rate q (bbl/d)</th>
+                <th class="py-2.5 px-3">GLR (scf/bbl)</th>
+                <th class="py-2.5 px-3">THP / Pwh (psig)</th>
+                <th class="py-2.5 px-3">BHP / Pwf (psig)</th>
+                <th class="py-2.5 px-3">NR Status</th>
+                <th class="py-2.5 px-3 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="batchTableBody" class="divide-y divide-slate-200 text-slate-800">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUB-PANEL 3: Discrete Depth Traverse Profile & CSV Export -->
+      <div id="panelTraverse" class="hidden space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p class="text-xs text-slate-600">
+            11-station depth-by-depth wellbore pressure and gradient profile from surface wellhead (0 ft) to sandface
+            (D).
+          </p>
+          <button onclick="exportTraverseCSV()"
+            class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition flex items-center gap-1.5">
+            <i class="fa-solid fa-download"></i> Download Traverse CSV
+          </button>
+        </div>
+
+        <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-lg">
+          <table class="w-full text-xs text-left font-mono">
+            <thead class="bg-slate-50 text-slate-600 uppercase text-[11px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-2.5 px-4">Station</th>
+                <th class="py-2.5 px-4">True Depth z (ft)</th>
+                <th class="py-2.5 px-4">Flowing Pressure P(z) (psig)</th>
+                <th class="py-2.5 px-4">Local Gradient dp/dh (psi/ft)</th>
+                <th class="py-2.5 px-4">Gilbert Equivalent Depth H (ft)</th>
+              </tr>
+            </thead>
+            <tbody id="traverseTableBody" class="divide-y divide-slate-200 text-slate-800">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
